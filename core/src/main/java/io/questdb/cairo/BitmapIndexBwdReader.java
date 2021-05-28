@@ -25,6 +25,9 @@
 package io.questdb.cairo;
 
 import io.questdb.cairo.sql.RowCursor;
+import io.questdb.cairo.vm.SinglePageMappedReadOnlyPageMemory;
+import io.questdb.std.BitmapIndexUtilsNative;
+import io.questdb.std.DirectLongList;
 import io.questdb.std.Unsafe;
 import io.questdb.std.str.Path;
 
@@ -53,6 +56,26 @@ public class BitmapIndexBwdReader extends AbstractIndexReader {
             long unIndexedNullCount
     ) {
         of(configuration, path, name, unIndexedNullCount, -1);
+    }
+
+    public void findRows(DirectLongList rowList, long keyLo, long keyHi, long minValue, long maxValue, int partitionIndex) {
+
+        long keyAddr = ((SinglePageMappedReadOnlyPageMemory)keyMem).addressOf(0);
+        long valueAddr = ((SinglePageMappedReadOnlyPageMemory)valueMem).addressOf(0);
+        long keyMemSize = keyMem.size();
+        long valMemSize = valueMem.size();
+
+        BitmapIndexUtilsNative.latestScanBackward(
+               keyAddr,
+               keyMemSize,
+               valueAddr,
+               valMemSize,
+               rowList.address,
+               rowList.capacity,
+               keyLo, keyHi, maxValue, minValue,
+               partitionIndex, blockValueCountMod
+        );
+
     }
 
     @Override

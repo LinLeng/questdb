@@ -24,6 +24,7 @@
 
 package io.questdb.griffin.engine.table;
 
+import io.questdb.cairo.BitmapIndexBwdReader;
 import io.questdb.cairo.BitmapIndexReader;
 import io.questdb.cairo.sql.DataFrame;
 import io.questdb.cairo.sql.RowCursor;
@@ -54,8 +55,10 @@ class LatestByAllIndexedRecordCursor extends AbstractRecordListCursor {
 
         int localLo = Integer.MAX_VALUE;
         int localHi = Integer.MIN_VALUE;
-
+        rows.extend(keyCount*Long.BYTES);
         DataFrame frame;
+        DirectLongList rowList = new DirectLongList(keyCount + 2);
+        DirectLongList rowList2 = new DirectLongList(8000);
         // frame metadata is based on TableReader, which is "full" metadata
         // this cursor works with subset of columns, which warrants column index remap
         int frameColumnIndex = columnIndexes.getQuick(columnIndex);
@@ -64,6 +67,7 @@ class LatestByAllIndexedRecordCursor extends AbstractRecordListCursor {
             final long rowLo = frame.getRowLo();
             final long rowHi = frame.getRowHi() - 1;
 
+            long start0 = System.nanoTime();
             for (int i = keyLo; i < keyHi; i++) {
                 int index = found.keyIndex(i);
                 if (index > -1) {
@@ -83,15 +87,45 @@ class LatestByAllIndexedRecordCursor extends AbstractRecordListCursor {
                     }
                 }
             }
+            long stop0 = System.nanoTime();
+            System.out.println("loop: " + (stop0 - start0));
 
-            // we have to sort rows because multiple symbols
-            // are liable to be looked up out of order
-            rows.sortAsUnsigned();
+            long start = System.nanoTime();
+
+            ((BitmapIndexBwdReader)indexReader).findRows(rowList, keyLo, keyHi, rowLo, rowHi, frame.getPartitionIndex());
+            long stop = System.nanoTime();
+            System.out.println("findRows: " + (stop - start));
+
+            long klo = rowList.get(0);
+            long khi = rowList.get(1);
 
             keyLo = localLo;
             keyHi = localHi + 1;
             localLo = Integer.MAX_VALUE;
             localHi = Integer.MIN_VALUE;
+        }
+
+        // we have to sort rows because multiple symbols
+        // are liable to be looked up out of order
+        rows.sortAsUnsigned();
+
+        for(int i = 2; i < rowList.capacity/8; ++i) {
+            long r = rowList.get(i);
+            if(r > 0) {
+                rowList2.add(r);
+            }
+        }
+
+        rowList2.sortAsUnsigned();
+
+        if(rowList2.size() != rows.size()) {
+            System.out.println(rowList2.size() + "!==" + rows.size());
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            long r1 = rows.get(i);
+            long r2 = rowList2.get(i);
+            if(r1 != r2)
+                System.out.println(rows.get(i) + " -> " + rowList2.get(i));
         }
     }
 }

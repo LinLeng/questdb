@@ -37,8 +37,8 @@ public class DirectLongList implements Mutable, Closeable {
     long pos;
     long start;
     long limit;
-    private long address;
-    private long capacity;
+    public long address;
+    public long capacity;
 
     public DirectLongList(long capacity) {
         this.capacity = (capacity * Long.BYTES);
@@ -163,7 +163,7 @@ public class DirectLongList implements Mutable, Closeable {
     }
 
     // desired capacity in bytes (not count of LONG values)
-    private void extend(long capacity) {
+    public void extend(long capacity) {
         final long oldCapacity = this.capacity;
         this.capacity = capacity;
         long address = Unsafe.realloc(this.address, oldCapacity, capacity);
